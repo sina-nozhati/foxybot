@@ -136,7 +136,17 @@ def calculate_remaining_last_online(last_online_date_time):
 
 # Process users data - return list of users
 def dict_process(url, users_dict, sub_id=None, server_id=None):
-    BASE_URL = urlparse(url,).scheme + "://" + urlparse(url,).netloc
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    path_parts = [p for p in parsed.path.split('/') if p]
+    
+    if len(path_parts) < 1:
+        logging.error(f"Invalid URL format: {url}")
+        return False
+    
+    proxy_path = path_parts[0]  # First part is proxy_path
+    BASE_URL = f"{parsed.scheme}://{parsed.netloc}"
+    
     logging.info(f"Parse users page")
     if not users_dict:
         return False
@@ -153,7 +163,7 @@ def dict_process(url, users_dict, sub_id=None, server_id=None):
             "comment": user['comment'],
             "last_connection": calculate_remaining_last_online(user['last_online']) if user['last_online'] else None,
             "uuid": user['uuid'],
-            "link": f"{BASE_URL}/{urlparse(url).path.split('/')[1]}/{user['uuid']}/",
+            "link": f"{BASE_URL}/{proxy_path}/{user['uuid']}/",
             "mode": user['mode'],
             "enable": user['enable'],
             "sub_id": sub_id,
@@ -192,28 +202,33 @@ def sub_links(uuid, url= None):
             if servers:
                 server = servers[0]
                 url = server['url']
-        # else:
-        #     servers = USERS_DB.select_servers()
-        #     if servers:
-        #         for server in servers:
-        #             users_list = api.find(server['url'] + API_PATH, uuid)
-        #             if users_list:
-        #                 url = server['url']
-        #                 break
-    BASE_URL = urlparse(url).scheme + "://" + urlparse(url).netloc
+    
+    # Parse URL to get proxy_path
+    # URL format: https://domain.com/proxy_path/admin_uuid/
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    path_parts = [p for p in parsed.path.split('/') if p]
+    
+    if len(path_parts) < 1:
+        logging.error(f"Invalid URL format: {url}")
+        return {}
+    
+    proxy_path = path_parts[0]  # First part is proxy_path
+    BASE_URL = f"{parsed.scheme}://{parsed.netloc}"
+    
     logging.info(f"Get sub links of user - {uuid}")
     sub = {}
-    PANEL_DIR = urlparse(url).path.split('/')
-    # Clash open app: clash://install-config?url=
-    # Hidden open app: clashmeta://install-config?url=
-    sub['clash_configs'] = f"{BASE_URL}/{PANEL_DIR[1]}/{uuid}/clash/all.yml"
-    sub['hiddify_configs'] = f"{BASE_URL}/{PANEL_DIR[1]}/{uuid}/clash/meta/all.yml"
-    sub['sub_link'] = f"{BASE_URL}/{PANEL_DIR[1]}/{uuid}/all.txt"
-    sub['sub_link_b64'] = f"{BASE_URL}/{PANEL_DIR[1]}/{uuid}/all.txt?base64=True"
+    
+    # API v2 user config links format
+    # https://domain.com/proxy_path/user_uuid/
+    sub['clash_configs'] = f"{BASE_URL}/{proxy_path}/{uuid}/clash/all.yml"
+    sub['hiddify_configs'] = f"{BASE_URL}/{proxy_path}/{uuid}/clash/meta/all.yml"
+    sub['sub_link'] = f"{BASE_URL}/{proxy_path}/{uuid}/all.txt"
+    sub['sub_link_b64'] = f"{BASE_URL}/{proxy_path}/{uuid}/all.txt?base64=True"
     # Add in v8.0 Hiddify
-    sub['sub_link_auto'] = f"{BASE_URL}/{PANEL_DIR[1]}/{uuid}/sub/?asn=unknown"
-    sub['sing_box_full'] = f"{BASE_URL}/{PANEL_DIR[1]}/{uuid}/full-singbox.json?asn=unknown"
-    sub['sing_box'] = f"{BASE_URL}/{PANEL_DIR[1]}/{uuid}/singbox.json?asn=unknown"
+    sub['sub_link_auto'] = f"{BASE_URL}/{proxy_path}/{uuid}/sub/?asn=unknown"
+    sub['sing_box_full'] = f"{BASE_URL}/{proxy_path}/{uuid}/full-singbox.json?asn=unknown"
+    sub['sing_box'] = f"{BASE_URL}/{proxy_path}/{uuid}/singbox.json?asn=unknown"
     return sub
 
 
@@ -259,9 +274,21 @@ def sub_parse(sub):
 # Backup panel
 def backup_panel(url):
     logging.info(f"Backup panel")
-    BASE_URL = urlparse(url,).scheme + "://" + urlparse(url,).netloc
-    dir_panel = urlparse(url).path.split('/')
-    backup_url = f"{BASE_URL}/{dir_panel[1]}/{dir_panel[2]}/admin/backup/backupfile/"
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    path_parts = [p for p in parsed.path.split('/') if p]
+    
+    if len(path_parts) < 2:
+        logging.error(f"Invalid URL format: {url}")
+        return False
+    
+    proxy_path = path_parts[0]  # First part is proxy_path
+    admin_uuid = path_parts[1]  # Second part is admin UUID
+    BASE_URL = f"{parsed.scheme}://{parsed.netloc}"
+    
+    # API v2 doesn't have a direct backup endpoint in the provided documentation
+    # Using the old backup endpoint as fallback
+    backup_url = f"{BASE_URL}/{proxy_path}/{admin_uuid}/admin/backup/backupfile/"
 
     backup_req = get_request(backup_url)
     if not backup_req or backup_req.status_code != 200:
@@ -270,7 +297,7 @@ def backup_panel(url):
     now = datetime.now()
     dt_string = now.strftime("%d-%m-%Y_%H-%M-%S")
 
-    file_name = f"Backup_{urlparse(url,).netloc}_{dt_string}.json"
+    file_name = f"Backup_{parsed.netloc}_{dt_string}.json"
 
     file_name = os.path.join(BACKUP_LOC, file_name)
     if not os.path.exists(BACKUP_LOC):

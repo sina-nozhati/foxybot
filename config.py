@@ -22,7 +22,7 @@ LOG_LOC = os.path.join(LOG_DIR, "hidyBot.log")
 BACKUP_LOC = os.path.join(os.getcwd(), "Backup")
 RECEIPTIONS_LOC = os.path.join(os.getcwd(), "UserBot", "Receiptions")
 BOT_BACKUP_LOC = os.path.join(os.getcwd(), "Backup", "Bot")
-API_PATH = "/api/v1"
+API_PATH = "/api/v2/admin"
 HIDY_BOT_ID = "@HidyBotGroup"
 
 # if directories not exists, create it
@@ -108,39 +108,82 @@ def set_config_variables(configs, server_url):
         setup_users_db()
     PANEL_URL = server_url
     LANG = configs["bot_lang"]
-    # PANEL_ADMIN_ID = ADMIN_DB.find_admins(uuid=urlparse(PANEL_URL).path.split('/')[2])
-    PANEL_ADMIN_ID = urlparse(PANEL_URL).path.split('/')[2]
-    if not PANEL_ADMIN_ID:
+    
+    # Extract admin UUID from panel URL
+    # URL format: https://domain.com/proxy_path/admin_uuid/
+    parsed = urlparse(PANEL_URL)
+    path_parts = [p for p in parsed.path.split('/') if p]
+    
+    if len(path_parts) >= 2:
+        PANEL_ADMIN_ID = path_parts[1]  # Second part is admin UUID
+    else:
         print(colored("Admin panel UUID is not valid!", "red"))
         raise Exception(f"Admin panel UUID is not valid!\nBe in touch with {HIDY_BOT_ID}")
-    PANEL_ADMIN_ID = PANEL_ADMIN_ID[0][0]
 
 
 def panel_url_validator(url):
+    """
+    Validate Hiddify panel URL for API v2
+    Expected format: https://domain.com/proxy_path/admin_uuid/
+    Example: https://cld.sin1990.ir/M5nZyVggd71SDkFeK0dZJ/c801ed73-24c6-4a72-a6d3-7258799c18d9/
+    """
     if not (url.startswith("https://") or url.startswith("http://")):
         print(colored("URL must start with http:// or https://", "red"))
         return False
-    if url.endswith("/"):
-        url = url[:-1]
-    if url.endswith("admin"):
-        url = url.replace("/admin", "")
-    if url.endswith("admin/user"):
-        url = url.replace("/admin/user", "")
+    
+    # Ensure URL ends with /
+    if not url.endswith("/"):
+        url = url + "/"
+    
+    # Remove /admin or /admin/user suffixes if present
+    if url.endswith("/admin/"):
+        url = url.replace("/admin/", "/")
+    if url.endswith("/admin/user/"):
+        url = url.replace("/admin/user/", "/")
+    
     print(colored("Checking URL...", "yellow"))
+    
+    # Parse URL to extract components
+    parsed = urlparse(url)
+    path_parts = [p for p in parsed.path.split('/') if p]
+    
+    # Validate URL structure: should have proxy_path and admin_uuid
+    if len(path_parts) < 2:
+        print(colored("URL format is invalid! Expected format: https://domain.com/proxy_path/admin_uuid/", "red"))
+        return False
+    
+    proxy_path = path_parts[0]
+    admin_uuid = path_parts[1]
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+    
+    # Test API v2 connectivity
     try:
-        request = requests.get(f"{url}/admin/")
+        # Try to ping the API endpoint
+        api_url = f"{base_url}/{proxy_path}/api/v2/panel/ping/"
+        headers = {
+            'Hiddify-API-Key': admin_uuid,
+            'Accept': 'application/json'
+        }
+        request = requests.get(api_url, headers=headers, timeout=10)
+        
+        if request.status_code == 200:
+            print(colored("URL is valid!", "green"))
+            return url
+        else:
+            print(colored(f"API returned status code: {request.status_code}", "red"))
+            print(colored("Please check your admin panel URL", "red"))
+            return False
+            
     except requests.exceptions.ConnectionError as e:
         print(colored("URL is not valid! Error in connection", "red"))
         print(colored(f"Error: {e}", "red"))
         return False
-    
-    if request.status_code != 200:
-        print(colored("URL is not valid!", "red"))
-        print(colored(f"Error: {request.status_code}", "red"))
+    except requests.exceptions.Timeout:
+        print(colored("Connection timeout! Please check the URL", "red"))
         return False
-    elif request.status_code == 200:
-        print(colored("URL is valid!", "green"))
-    return url
+    except Exception as e:
+        print(colored(f"Error validating URL: {e}", "red"))
+        return False
 
 
 def bot_token_validator(token):
@@ -210,7 +253,7 @@ def set_by_user():
         client_token = None
     print()
     print(colored(
-        "Example: https://panel.example.com/7frgemkvtE0/78854985-68dp-425c-989b-7ap0c6kr9bd4\n[exactly like this!]",
+        "Example: https://cld.sin1990.ir/M5nZyVggd71SDkFeK0dZJ/c801ed73-24c6-4a72-a6d3-7258799c18d9/\n[Admin panel URL with proxy_path and admin UUID - exactly like this!]",
         "yellow"))
     while True:
         url = input("[+] Enter your panel URL:")
