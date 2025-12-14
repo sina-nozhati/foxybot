@@ -29,6 +29,6 @@ sleep 5
 echo -e "${GREEN}Starting the bot...${RESET}"
 
 > $install_dir/bot.log
-nohup python3 /opt/Hiddify-Telegram-Bot/hiddifyTelegramBot.py >> /opt/Hiddify-Telegram-Bot/bot.log 2>&1 &
+nohup $install_dir/venv/bin/python /opt/Hiddify-Telegram-Bot/hiddifyTelegramBot.py >> /opt/Hiddify-Telegram-Bot/bot.log 2>&1 &
 
 echo -e "${GREEN}Bot has been restarted.${RESET}"

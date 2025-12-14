@@ -91,14 +91,14 @@ function update_bot() {
   display_message "${GREEN}Updating the bot...${RESET}"
   git stash
   if git pull origin "$branch"; then
-    pip install -r requirements.txt || display_error_and_exit "Failed to install requirements."
-    nohup python3 hiddifyTelegramBot.py >>bot.log 2>&1 &
+    $install_dir/venv/bin/pip install -r requirements.txt || display_error_and_exit "Failed to install requirements."
+    nohup $install_dir/venv/bin/python hiddifyTelegramBot.py >>bot.log 2>&1 &
     display_message "${GREEN}Bot has been updated and restarted.${RESET}"
   else
     if git pull --rebase origin "$branch"; then
-      pip install -r requirements.txt || display_error_and_exit "Failed to install requirements."
+      $install_dir/venv/bin/pip install -r requirements.txt || display_error_and_exit "Failed to install requirements."
       > $install_dir/bot.log
-      nohup python3 hiddifyTelegramBot.py >>bot.log 2>&1 &
+      nohup $install_dir/venv/bin/python hiddifyTelegramBot.py >>bot.log 2>&1 &
       display_message "${GREEN}Bot has been updated and restarted.${RESET}"
     else
       display_message "${RED}Failed to update the bot. Check the Git repository for errors.${RESET}"
@@ -130,7 +130,7 @@ if [ ! -f /opt/Hiddify-Telegram-Bot/version.py ]; then
   reinstall_bot
 else
 
-  current_version=$(python3 /opt/Hiddify-Telegram-Bot/version.py --version)  
+  current_version=$($install_dir/venv/bin/python /opt/Hiddify-Telegram-Bot/version.py --version)  
   get_backup
   update_bot
 
@@ -138,15 +138,15 @@ else
   add_cron_job_if_not_exists "@reboot cd $install_dir && ./restart.sh"
 
   # Add cron job to run every 6 hours
-  add_cron_job_if_not_exists "0 */6 * * * cd $install_dir && python3 crontab.py --backup"
+  add_cron_job_if_not_exists "0 */6 * * * cd $install_dir && $install_dir/venv/bin/python crontab.py --backup"
 
   # Add cron job to run at 12:00 PM daily
-  add_cron_job_if_not_exists "0 12 * * * cd $install_dir && python3 crontab.py --reminder"
+  add_cron_job_if_not_exists "0 12 * * * cd $install_dir && $install_dir/venv/bin/python crontab.py --reminder"
 
   echo -e "${YELLOW}Current version: $current_version${RESET}"
   echo -e "${YELLOW}Target version: $target_version${RESET}"
   
-  if python3 /opt/Hiddify-Telegram-Bot/update.py --current-version "$current_version" --target-version "$target_version"; then
+  if $install_dir/venv/bin/python /opt/Hiddify-Telegram-Bot/update.py --current-version "$current_version" --target-version "$target_version"; then
       echo "update.py has been run."
   else
       echo "update.py has not been run."

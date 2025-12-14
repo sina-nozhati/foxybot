@@ -52,7 +52,7 @@ install_python3_and_pip_if_needed() {
       source /etc/os-release
       if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
         sudo apt update
-        sudo apt install -y python3 python3-pip
+        sudo apt install -y python3 python3-pip python3-venv
       elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
         sudo yum install -y python3 python3-pip
       fi
@@ -106,11 +106,14 @@ fi
 
 cd "$install_dir" || display_error_and_exit "Failed to change directory."
 
-echo -e "${GREEN}Step 2: Installing requirements...${RESET}"
-pip install -r requirements.txt || display_error_and_exit "Failed to install requirements."
+echo -e "${GREEN}Step 2: Creating Python virtual environment...${RESET}"
+python3 -m venv "$install_dir/venv" || display_error_and_exit "Failed to create virtual environment."
+
+echo -e "${GREEN}Step 3: Installing requirements...${RESET}"
+"$install_dir/venv/bin/pip" install -r requirements.txt || display_error_and_exit "Failed to install requirements."
 
 
-echo -e "${GREEN}Step 3: Preparing ...${RESET}"
+echo -e "${GREEN}Step 4: Preparing ...${RESET}"
 logs_dir="$install_dir/Logs"
 receiptions_dir="$install_dir/UserBot/Receiptions"
 
@@ -127,13 +130,13 @@ create_directory_if_not_exists "$receiptions_dir"
 chmod +x "$install_dir/restart.sh"
 chmod +x "$install_dir/update.sh"
 
-echo -e "${GREEN}Step 4: Running config.py to generate config.json...${RESET}"
-python3 config.py || display_error_and_exit "Failed to run config.py."
+echo -e "${GREEN}Step 5: Running config.py to generate config.json...${RESET}"
+"$install_dir/venv/bin/python" config.py || display_error_and_exit "Failed to run config.py."
 
-echo -e "${GREEN}Step 5: Running the bot in the background...${RESET}"
-nohup python3 hiddifyTelegramBot.py >>$install_dir/bot.log 2>&1 &
+echo -e "${GREEN}Step 6: Running the bot in the background...${RESET}"
+nohup "$install_dir/venv/bin/python" hiddifyTelegramBot.py >>$install_dir/bot.log 2>&1 &
 
-echo -e "${GREEN}Step 6: Adding cron jobs...${RESET}"
+echo -e "${GREEN}Step 7: Adding cron jobs...${RESET}"
 
 add_cron_job_if_not_exists() {
   local cron_job="$1"
@@ -159,16 +162,16 @@ add_cron_job_if_not_exists() {
 add_cron_job_if_not_exists "@reboot cd $install_dir && ./restart.sh"
 
 # Add cron job to run every 6 hours
-add_cron_job_if_not_exists "0 */6 * * * cd $install_dir && python3 crontab.py --backup"
+add_cron_job_if_not_exists "0 */6 * * * cd $install_dir && $install_dir/venv/bin/python crontab.py --backup"
 
 # Add cron job to run at 12:00 PM daily
-add_cron_job_if_not_exists "0 12 * * * cd $install_dir && python3 crontab.py --reminder"
+add_cron_job_if_not_exists "0 12 * * * cd $install_dir && $install_dir/venv/bin/python crontab.py --reminder"
 
 
 echo -e "${GREEN}Waiting for a few seconds...${RESET}"
 sleep 5
 
-if pgrep -f "python3 hiddifyTelegramBot.py" >/dev/null; then
+if pgrep -f "hiddifyTelegramBot.py" >/dev/null; then
   echo -e "${GREEN}The bot has been started successfully.${RESET}"
   echo -e "${GREEN}Send [/start] in Telegram bot.${RESET}"
 else
