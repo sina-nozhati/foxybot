@@ -213,3 +213,78 @@ def delete(url, uuid, endpoint="/user/"):
     except Exception as e:
         logging.error("API error: %s" % e)
         return None
+
+
+def get_client_proxy_path(url):
+    """
+    Get client proxy path from all-configs endpoint
+    Endpoint: /{proxy_path}/api/v2/admin/all-configs/
+    Returns: Client proxy path string (e.g., '4bMP90n3sh9W4sbm0Rh')
+    
+    This is more efficient than calling user profile endpoint for each user,
+    as it requires only ONE API call per server instead of one per user.
+    
+    The client proxy path is found in chconfigs[0].proxy_path_client
+    """
+    try:
+        base_url, proxy_path, admin_uuid = parse_panel_url(url)
+        if not base_url:
+            return None
+        
+        # API v2 endpoint: /{proxy_path}/api/v2/admin/all-configs/
+        api_url = f"{base_url}/{proxy_path}/api/v2/admin/all-configs/"
+        
+        headers = {
+            'Hiddify-API-Key': admin_uuid,
+            'Accept': 'application/json'
+        }
+        
+        response = requests.get(api_url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            configs = response.json()
+            
+            # Extract client proxy path from chconfigs[0].proxy_path_client
+            # Note: chconfigs is a dict with numeric keys, not a list
+            if 'chconfigs' in configs:
+                chconfig_data = configs['chconfigs']
+                
+                # Handle if chconfigs is a dict (most common) or list
+                if isinstance(chconfig_data, dict):
+                    # Get first config from dict (usually key '0')
+                    if chconfig_data:
+                        first_key = list(chconfig_data.keys())[0]
+                        first_config = chconfig_data[first_key]
+                        client_proxy = first_config.get('proxy_path_client')
+                        if client_proxy:
+                            logging.info(f"Client proxy path retrieved: {client_proxy}")
+                            return client_proxy
+                        else:
+                            logging.warning("proxy_path_client not found in first chconfig")
+                elif isinstance(chconfig_data, list) and len(chconfig_data) > 0:
+                    # Fallback: handle as list (in case API changes)
+                    client_proxy = chconfig_data[0].get('proxy_path_client')
+                    if client_proxy:
+                        logging.info(f"Client proxy path retrieved: {client_proxy}")
+                        return client_proxy
+                else:
+                    logging.warning("chconfigs is empty or has unexpected structure")
+            else:
+                logging.warning("chconfigs not found in all-configs response")
+            
+            # Fallback: use admin proxy path
+            logging.warning(f"Using admin proxy path as fallback: {proxy_path}")
+            return proxy_path
+        else:
+            logging.warning(f"Could not fetch all-configs: Status {response.status_code}")
+            # Fallback: use admin proxy path
+            return proxy_path
+            
+    except Exception as e:
+        logging.warning(f"Error fetching client proxy path: {e}")
+        # Fallback: try to extract admin proxy path
+        try:
+            _, proxy_path, _ = parse_panel_url(url)
+            return proxy_path
+        except:
+            return None

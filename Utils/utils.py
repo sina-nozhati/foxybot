@@ -144,14 +144,26 @@ def dict_process(url, users_dict, sub_id=None, server_id=None):
         logging.error(f"Invalid URL format: {url}")
         return False
     
-    proxy_path = path_parts[0]  # First part is proxy_path
+    admin_proxy_path = path_parts[0]  # Admin proxy path as fallback
     BASE_URL = f"{parsed.scheme}://{parsed.netloc}"
     
     logging.info(f"Parse users page")
     if not users_dict:
         return False
+    
+    # Get client proxy path once for all users (more efficient!)
+    client_proxy_path = api.get_client_proxy_path(url)
+    if not client_proxy_path:
+        logging.warning("Could not get client proxy path, using admin proxy path as fallback")
+        client_proxy_path = admin_proxy_path
+    else:
+        logging.info(f"Using client proxy path: {client_proxy_path}")
+    
     users_list = []
     for user in users_dict:
+        # Use client proxy path for all users
+        user_link = f"{BASE_URL}/{client_proxy_path}/{user['uuid']}/"
+        
         users_list.append({
             "name": user['name'],
             "usage": {
@@ -163,7 +175,7 @@ def dict_process(url, users_dict, sub_id=None, server_id=None):
             "comment": user['comment'],
             "last_connection": calculate_remaining_last_online(user['last_online']) if user['last_online'] else None,
             "uuid": user['uuid'],
-            "link": f"{BASE_URL}/{proxy_path}/{user['uuid']}/",
+            "link": user_link,
             "mode": user['mode'],
             "enable": user['enable'],
             "sub_id": sub_id,
@@ -186,7 +198,7 @@ def user_info(url, uuid):
 
 
 # Get sub links - return dict of sub links
-def sub_links(uuid, url= None):
+def sub_links(uuid, url=None):
     if not url:
         non_order_users = USERS_DB.find_non_order_subscription(uuid=uuid)
         order_users = USERS_DB.find_order_subscription(uuid=uuid)
@@ -203,8 +215,11 @@ def sub_links(uuid, url= None):
                 server = servers[0]
                 url = server['url']
     
-    # Parse URL to get proxy_path
-    # URL format: https://domain.com/proxy_path/admin_uuid/
+    if not url:
+        logging.error("No URL found for generating subscription links")
+        return {}
+    
+    # Parse URL to get admin proxy_path as fallback
     from urllib.parse import urlparse
     parsed = urlparse(url)
     path_parts = [p for p in parsed.path.split('/') if p]
@@ -213,10 +228,22 @@ def sub_links(uuid, url= None):
         logging.error(f"Invalid URL format: {url}")
         return {}
     
-    proxy_path = path_parts[0]  # First part is proxy_path
+    admin_proxy_path = path_parts[0]
+    
+    # Get client proxy path once (more efficient!)
+    client_proxy_path = api.get_client_proxy_path(url + API_PATH)
+    
+    # Use client proxy path if available, otherwise fallback to admin proxy path
+    proxy_path = client_proxy_path if client_proxy_path else admin_proxy_path
+    
+    if not client_proxy_path:
+        logging.warning(f"Using admin proxy path for user {uuid} - subscription links may not work correctly")
+    else:
+        logging.info(f"Using client proxy path: {client_proxy_path}")
+    
     BASE_URL = f"{parsed.scheme}://{parsed.netloc}"
     
-    logging.info(f"Get sub links of user - {uuid}")
+    logging.info(f"Get sub links of user - {uuid} with proxy_path: {proxy_path}")
     sub = {}
     
     # API v2 user config links format
