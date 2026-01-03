@@ -24,7 +24,7 @@ This bot has been updated to support **Hiddify Panel API v2**. If you're upgradi
 https://your-domain.com/proxy_path/admin_uuid/
 
 Example:
-https://cld.sin1990.ir/M5nZyVggd71SDkFeK0dZJ/c801ed73-24c6-4a72-a6d3-7258799c18d9/
+https://sub.domain.ir/M5nZyVggd71SDkFeK0dZJ/c801ed74-24c6-4a72-a6d3-7258799c18d9/
 ```
 
 ## Features
